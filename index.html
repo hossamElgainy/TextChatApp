@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SignalR Chat</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/7.0.5/signalr.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+
+        .chat-container {
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .message-container {
+            display: flex;
+            margin: 5px 0;
+        }
+
+        .my-message {
+            background-color: #007bff;
+            color: white;
+            padding: 10px;
+            border-radius: 10px;
+            max-width: 60%;
+            text-align: right;
+        }
+
+        .other-message {
+            background-color: #f0f0f0;
+            padding: 10px;
+            border-radius: 10px;
+            max-width: 60%;
+            text-align: left;
+        }
+
+        .my-message-container {
+            justify-content: flex-end;
+            display: flex;
+        }
+
+        .other-message-container {
+            justify-content: flex-start;
+            display: flex;
+        }
+
+        #messagesList {
+            list-style-type: none;
+            padding: 0;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .form-control {
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="chat-container">
+            <h2 class="text-center mb-4">SignalR Chat</h2>
+
+            <div class="mb-3">
+                <label for="senderId" class="form-label">Sender ID:</label>
+                <input type="text" id="senderId" class="form-control" placeholder="Enter your ID">
+            </div>
+
+            <button onclick="connectSignalR()" class="btn btn-primary w-100">Connect</button>
+
+            <hr>
+
+            <div class="mb-3">
+                <label for="receiverId" class="form-label">Receiver ID:</label>
+                <input type="text" id="receiverId" class="form-control" placeholder="Enter Receiver ID">
+            </div>
+
+            <div class="mb-3">
+                <label for="message" class="form-label">Message:</label>
+                <input type="text" id="message" class="form-control" placeholder="Type your message">
+            </div>
+
+            <button onclick="sendMessage()" class="btn btn-success w-100">Send Message</button>
+
+            <hr>
+
+            <h5 id="chatTitle" class="text-center">Chat Messages</h5>
+            <ul id="messagesList" class="list-group"></ul>
+        </div>
+    </div>
+
+    <script>
+    
+        let hasMoreMessages = true;
+        let isLoading = false; // Prevents multiple API calls
+        let senderId = "";
+        let userId = "";
+        let connection;
+
+        function connectSignalR() {
+            senderId = document.getElementById("senderId").value;
+            userId = senderId;
+
+            if (!senderId) {
+                alert("Please enter a Sender ID first.");
+                return;
+            }
+
+            const serverUrl = `https://localhost:7098/chatHub?userId=${senderId}`;
+            loadChatHistory();
+            connection = new signalR.HubConnectionBuilder()
+                .withUrl(serverUrl)
+                .withAutomaticReconnect()
+                .build();
+
+            connection.start()
+                .then(() => console.log(`Connected as ${senderId}`))
+                .catch(err => {
+                    console.error("Error connecting:", err);
+                    setTimeout(connectSignalR, 5000);
+                });
+
+            /*  connection.on("ReceiveMessage", data => {
+  
+  
+                  const senderId = data?.sender?.id ?? "Unknown";
+                  const senderName = data?.sender?.name ?? "Unknown";
+                  const receiverId = data?.receiver?.id ?? "Unknown";
+                  const receiverName = data?.receiver?.name ?? "Unknown";
+                  const msgText = data?.message ?? "No message";
+                  const timestamp = new Date(data?.timestamp).toLocaleTimeString(); // Format timestamp
+  
+                  const msgList = document.getElementById("messagesList");
+                  const newMsgContainer = document.createElement("div");
+                  newMsgContainer.classList.add("message-container");
+  
+                  const newMsg = document.createElement("div");
+  
+                  // Check if the sender is the current user
+                  if (senderId === userId) {
+                      newMsg.classList.add("my-message", "p-2");
+                      newMsgContainer.classList.add("my-message-container");
+                  } else {
+                      newMsg.classList.add("other-message", "p-2");
+                      newMsgContainer.classList.add("other-message-container");
+                  }
+  
+                  // Display the sender name and message
+                  newMsg.innerHTML = `${msgText} <br><small>${timestamp}</small>`;
+  
+                  newMsgContainer.appendChild(newMsg);
+                  msgList.appendChild(newMsgContainer);
+  
+                  // Auto-scroll to the latest message
+                  msgList.scrollTop = msgList.scrollHeight;
+  
+              });
+  */
+
+        }
+        // display the message
+        function displayMessage(data, prepend = false) {
+            const senderId = data?.senderId ?? "Unknown";
+            const receiverId = data?.receiverId ?? "Unknown";
+            const msgText = data?.messageText ?? "No message";
+            const timestamp = new Date(data?.timestamp).toLocaleTimeString(); // Format timestamp
+            console.log(data);
+            const msgList = document.getElementById("messagesList");
+            const newMsgContainer = document.createElement("div");
+            newMsgContainer.classList.add("message-container");
+
+            const newMsg = document.createElement("div");
+
+            if (senderId === userId) {
+                newMsg.classList.add("my-message", "p-2");
+                newMsgContainer.classList.add("my-message-container");
+            } else {
+                newMsg.classList.add("other-message", "p-2");
+                newMsgContainer.classList.add("other-message-container");
+            }
+
+            newMsg.innerHTML = `${msgText} <br><small>${timestamp}</small>`;
+            newMsgContainer.appendChild(newMsg);
+
+            if (prepend) {
+                msgList.prepend(newMsgContainer); // Add old messages at the top
+            } else {
+                msgList.appendChild(newMsgContainer); // Add new messages at the bottom
+            }
+
+            // Auto-scroll only for new messages
+            if (!prepend) {
+                msgList.scrollTop = msgList.scrollHeight;
+            }
+        }
+        // receive message
+        connection.on("ReceiveMessage", data => {
+            displayMessage(data);
+        });
+
+        // send the message
+        document.getElementById("receiverId").addEventListener("input", updateChatTitle);
+        function sendMessage() {
+            const receiverId = document.getElementById("receiverId").value;
+            const message = document.getElementById("message").value;
+
+            if (!senderId) {
+                alert("Please enter a Sender ID and click 'Connect' first.");
+                return;
+            }
+
+            if (!receiverId || !message) {
+                alert("Please enter both Receiver ID and Message.");
+                return;
+            }
+
+            connection.invoke("SendMessage", receiverId, senderId, message)
+                .then(() => console.log("Message sent:", message))
+                .catch(err => console.error("Error sending message:", err));
+        }
+
+        // load The History
+        async function loadChatHistory(prepend = false) {
+            let currentPage = 1;
+            let pageSize = 10;
+            if (isLoading) return;
+            isLoading = true;
+            const senderId = document.getElementById("senderId").value;
+            const receiverId = document.getElementById("receiverId").value;
+
+            if (!senderId || !receiverId) return;
+            const messagesList = document.getElementById("messagesList");
+            const previousScrollHeight = messagesList.scrollHeight; // Save scroll height before loading
+
+            try {
+                const response = await fetch(`https://localhost:7098/api/Messages/GetChatHistory?SenderId=${senderId}&ReceiverId=${receiverId}&PageSize=${pageSize}&PageIndex=${currentPage}`);
+                const data = await response.json();
+                console.log(data);
+                if (data.mappedMassages.length > 0) {
+                    data.mappedMassages.forEach(msg => {
+                        displayMessage(msg, prepend);
+                    });
+
+                    hasMoreMessages = data.hasMore;
+                    currentPage++; // Increment page only if there are more messages
+                } else {
+                    hasMoreMessages = false;
+                }
+            } catch (error) {
+                console.error("Error loading chat history:", error);
+            } finally {
+                isLoading = false;
+                if (prepend) {
+                    // Maintain scroll position after loading older messages
+                    messagesList.scrollTop = messagesList.scrollHeight - previousScrollHeight;
+                }
+            }
+        }
+        document.getElementById("messagesList").addEventListener("scroll", function () {
+            if (this.scrollTop <= 10 && hasMoreMessages && !isLoading) {
+                loadChatHistory(true); // Load older messages at the top
+            }
+        });
+    </script>
+</body>
+
+</html>
