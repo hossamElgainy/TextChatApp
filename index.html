@@ -102,12 +102,13 @@
     </div>
 
     <script>
-    
-        let hasMoreMessages = true;
-        let isLoading = false; // Prevents multiple API calls
+        let connection;
         let senderId = "";
         let userId = "";
-        let connection;
+        let hasMoreMessages = true;
+        let isLoading = false;
+        let currentPage = 1;
+        let pageSize = 10;
 
         function connectSignalR() {
             senderId = document.getElementById("senderId").value;
@@ -119,64 +120,34 @@
             }
 
             const serverUrl = `https://localhost:7098/chatHub?userId=${senderId}`;
-            loadChatHistory();
+
             connection = new signalR.HubConnectionBuilder()
                 .withUrl(serverUrl)
                 .withAutomaticReconnect()
                 .build();
 
             connection.start()
-                .then(() => console.log(`Connected as ${senderId}`))
+                .then(() => {
+                    console.log(`Connected as ${senderId}`);
+                    loadChatHistory();
+                })
                 .catch(err => {
                     console.error("Error connecting:", err);
                     setTimeout(connectSignalR, 5000);
                 });
 
-            /*  connection.on("ReceiveMessage", data => {
-  
-  
-                  const senderId = data?.sender?.id ?? "Unknown";
-                  const senderName = data?.sender?.name ?? "Unknown";
-                  const receiverId = data?.receiver?.id ?? "Unknown";
-                  const receiverName = data?.receiver?.name ?? "Unknown";
-                  const msgText = data?.message ?? "No message";
-                  const timestamp = new Date(data?.timestamp).toLocaleTimeString(); // Format timestamp
-  
-                  const msgList = document.getElementById("messagesList");
-                  const newMsgContainer = document.createElement("div");
-                  newMsgContainer.classList.add("message-container");
-  
-                  const newMsg = document.createElement("div");
-  
-                  // Check if the sender is the current user
-                  if (senderId === userId) {
-                      newMsg.classList.add("my-message", "p-2");
-                      newMsgContainer.classList.add("my-message-container");
-                  } else {
-                      newMsg.classList.add("other-message", "p-2");
-                      newMsgContainer.classList.add("other-message-container");
-                  }
-  
-                  // Display the sender name and message
-                  newMsg.innerHTML = `${msgText} <br><small>${timestamp}</small>`;
-  
-                  newMsgContainer.appendChild(newMsg);
-                  msgList.appendChild(newMsgContainer);
-  
-                  // Auto-scroll to the latest message
-                  msgList.scrollTop = msgList.scrollHeight;
-  
-              });
-  */
-
+            connection.on("ReceiveMessage", data => {
+                displayMessage(data);
+            });
         }
-        // display the message
+
         function displayMessage(data, prepend = false) {
             const senderId = data?.senderId ?? "Unknown";
             const receiverId = data?.receiverId ?? "Unknown";
             const msgText = data?.messageText ?? "No message";
-            const timestamp = new Date(data?.timestamp).toLocaleTimeString(); // Format timestamp
+            const timestamp = new Date(data?.timestamp);
             console.log(data);
+
             const msgList = document.getElementById("messagesList");
             const newMsgContainer = document.createElement("div");
             newMsgContainer.classList.add("message-container");
@@ -195,34 +166,22 @@
             newMsgContainer.appendChild(newMsg);
 
             if (prepend) {
-                msgList.prepend(newMsgContainer); // Add old messages at the top
+                msgList.prepend(newMsgContainer);
             } else {
-                msgList.appendChild(newMsgContainer); // Add new messages at the bottom
+                msgList.appendChild(newMsgContainer);
             }
 
-            // Auto-scroll only for new messages
             if (!prepend) {
                 msgList.scrollTop = msgList.scrollHeight;
             }
         }
-        // receive message
-        connection.on("ReceiveMessage", data => {
-            displayMessage(data);
-        });
 
-        // send the message
-        document.getElementById("receiverId").addEventListener("input", updateChatTitle);
         function sendMessage() {
             const receiverId = document.getElementById("receiverId").value;
             const message = document.getElementById("message").value;
 
-            if (!senderId) {
-                alert("Please enter a Sender ID and click 'Connect' first.");
-                return;
-            }
-
-            if (!receiverId || !message) {
-                alert("Please enter both Receiver ID and Message.");
+            if (!senderId || !receiverId || !message) {
+                alert("Please enter all required fields.");
                 return;
             }
 
@@ -231,30 +190,32 @@
                 .catch(err => console.error("Error sending message:", err));
         }
 
-        // load The History
         async function loadChatHistory(prepend = false) {
-            let currentPage = 1;
-            let pageSize = 10;
             if (isLoading) return;
             isLoading = true;
+
             const senderId = document.getElementById("senderId").value;
             const receiverId = document.getElementById("receiverId").value;
 
             if (!senderId || !receiverId) return;
+
             const messagesList = document.getElementById("messagesList");
-            const previousScrollHeight = messagesList.scrollHeight; // Save scroll height before loading
+            const previousScrollHeight = messagesList.scrollHeight;
 
             try {
                 const response = await fetch(`https://localhost:7098/api/Messages/GetChatHistory?SenderId=${senderId}&ReceiverId=${receiverId}&PageSize=${pageSize}&PageIndex=${currentPage}`);
                 const data = await response.json();
-                console.log(data);
+                    console.log(data);
                 if (data.mappedMassages.length > 0) {
                     data.mappedMassages.forEach(msg => {
                         displayMessage(msg, prepend);
                     });
 
                     hasMoreMessages = data.hasMore;
-                    currentPage++; // Increment page only if there are more messages
+
+                    if (prepend) {
+                        currentPage++;
+                    }
                 } else {
                     hasMoreMessages = false;
                 }
@@ -262,15 +223,16 @@
                 console.error("Error loading chat history:", error);
             } finally {
                 isLoading = false;
+
                 if (prepend) {
-                    // Maintain scroll position after loading older messages
                     messagesList.scrollTop = messagesList.scrollHeight - previousScrollHeight;
                 }
             }
         }
+
         document.getElementById("messagesList").addEventListener("scroll", function () {
             if (this.scrollTop <= 10 && hasMoreMessages && !isLoading) {
-                loadChatHistory(true); // Load older messages at the top
+                loadChatHistory(true);
             }
         });
     </script>
